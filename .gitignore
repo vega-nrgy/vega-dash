@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Next.js
+.next/
+out/
+apps/web/.next/
+apps/web/out/
+
+# Env
+.env
+.env*.local
+**/.env
+!**/.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+apps/predict-service/.venv/
+
+# Supabase local
+supabase/.branches
+supabase/.temp
+
+# Misc
+.DS_Store
+*.log
+npm-debug.log*
+apps/web/scripts/smoke-output/
+
+# Sensitive local reference files (old project creds — never commit)
+assets/.env.old
+
+# Source data (large/private, not shipped)
+assets/*.xlsx
+assets/Sample Data/
+TS_HT_data/
+TS_LT_data/
