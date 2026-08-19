@@ -1,0 +1,178 @@
+@import "tailwindcss";
+
+@theme {
+  /* Vega Charge brand tokens — ported from assets/web-styles.css */
+  --color-ink: #001819;
+  --color-ink-soft: #33484a;
+  --color-mint: #00d9a5;
+  --color-mint-bright: #2be3b7;
+  --color-mint-deep: #00775c;
+  --color-paper: #fbfbf9;
+  --color-grey-soft: #edf2f3;
+  --color-white: #ffffff;
+  --color-muted: #5d7071;
+  --color-muted-onink: #9db4b0;
+  --color-onink: #c7d4d2;
+  --color-hairline: #e5e9e7;
+  --color-border: #d8e2e2;
+
+  --font-display: var(--font-sora), "Trebuchet MS", sans-serif;
+  --font-sans: var(--font-manrope), system-ui, ui-sans-serif, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, monospace;
+
+  --radius-input: 0.5rem;
+  --radius-sm: 0.75rem;
+  --radius-card: 1.25rem;
+  --radius-media: 1.75rem;
+
+  --shadow-lift: 0 12px 32px -12px rgb(0 24 25 / 0.14);
+  --shadow-hero-card: 0 24px 60px -20px rgb(0 0 0 / 0.5);
+
+  --animate-live-pulse: live-pulse 2.2s infinite;
+
+  @keyframes live-pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgb(0 217 165 / 0.55);
+    }
+    70% {
+      box-shadow: 0 0 0 12px rgb(0 217 165 / 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgb(0 217 165 / 0);
+    }
+  }
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-paper font-sans text-muted antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-mint);
+    outline-offset: 3px;
+  }
+}
+
+@utility chapter-label {
+  @apply font-mono text-[11px] font-normal uppercase tracking-[0.16em] text-mint-deep;
+}
+
+/* Leaflet station map — brand-styled markers/popups */
+.leaflet-popup-content-wrapper {
+  border-radius: 0.875rem;
+  box-shadow: 0 12px 32px -12px rgb(0 24 25 / 0.3);
+}
+
+.leaflet-popup-content {
+  margin: 16px 18px;
+  font-family: var(--font-sans);
+}
+
+.vc-id {
+  font: 500 9px var(--font-mono);
+  letter-spacing: 0.14em;
+  color: var(--color-mint-deep);
+}
+
+.vc-name {
+  font: 700 15px var(--font-sans);
+  color: var(--color-ink);
+  margin-top: 4px;
+}
+
+.vc-meta {
+  font: 400 11.5px/1.5 var(--font-sans);
+  color: var(--color-muted);
+  margin-top: 6px;
+}
+
+.vc-link {
+  display: inline-block;
+  font: 700 11.5px var(--font-sans);
+  color: var(--color-ink);
+  background: var(--color-mint);
+  padding: 7px 13px;
+  border-radius: 999px;
+  text-decoration: none;
+  margin-top: 10px;
+}
+
+.vc-link:hover {
+  background: var(--color-mint-bright);
+}
+
+.vc-note {
+  font: 400 9.5px var(--font-mono);
+  color: var(--color-muted-onink);
+  margin-top: 8px;
+}
+
+.vc-marker {
+  background: transparent;
+  border: none;
+}
+
+.vc-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--color-mint);
+  border: 3px solid #fff;
+  box-shadow:
+    0 0 0 2px var(--color-mint),
+    0 4px 10px rgb(0 24 25 / 0.35);
+}
+
+.vc-dot.pending {
+  background: var(--color-muted-onink);
+  box-shadow:
+    0 0 0 2px var(--color-muted-onink),
+    0 4px 10px rgb(0 24 25 / 0.35);
+}
+
+.vc-dot.ht {
+  background: var(--color-ink);
+  box-shadow:
+    0 0 0 2px var(--color-ink),
+    0 4px 10px rgb(0 24 25 / 0.35);
+}
+
+/* Predict-new-site candidate marker — not a real station, so deliberately
+   distinct: white fill, dashed mint ring, pulsing to read as "draggable". */
+.vc-dot.predict {
+  width: 22px;
+  height: 22px;
+  background: #fff;
+  border: 3px dashed var(--color-mint-deep);
+  box-shadow: 0 4px 10px rgb(0 24 25 / 0.35);
+  cursor: grab;
+  animation: var(--animate-live-pulse);
+}
+
+.vc-dot.predict:active {
+  cursor: grabbing;
+}
+
+/* Marker cluster — ink bg, mint count, matches brand */
+.vc-cluster {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: var(--color-ink);
+  border: 3px solid var(--color-mint);
+  color: var(--color-mint-bright);
+  font: 700 12px var(--font-mono);
+}
