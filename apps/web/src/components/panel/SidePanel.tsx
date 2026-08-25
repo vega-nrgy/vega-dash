@@ -16,6 +16,10 @@ interface SidePanelProps {
   onNearbyRadiusCommit: (radiusM: number) => void;
   predictCoords: { lat: number; lon: number } | null;
   onPredictCoordsChange: (lat: number, lon: number) => void;
+  /** Single-level "came from" panel — set only when a station was opened from within
+   * a list-bearing panel (area/landmark/nearby-analysis). See DashboardShell. */
+  previousPanel: PanelState | null;
+  onBack: () => void;
 }
 
 export function SidePanel({
@@ -27,6 +31,8 @@ export function SidePanel({
   onNearbyRadiusCommit,
   predictCoords,
   onPredictCoordsChange,
+  previousPanel,
+  onBack,
 }: SidePanelProps) {
   const open = panel.type !== "none";
 
@@ -37,7 +43,13 @@ export function SidePanel({
       }`}
     >
       {panel.type === "station" && (
-        <StationDetailPanel key={panel.scno} scno={panel.scno} onClose={onClose} />
+        <StationDetailPanel
+          key={panel.scno}
+          scno={panel.scno}
+          onClose={onClose}
+          previousPanel={previousPanel}
+          onBack={onBack}
+        />
       )}
       {panel.type === "area" && (
         <AreaMetricsPanel

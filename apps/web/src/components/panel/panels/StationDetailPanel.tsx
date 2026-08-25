@@ -2,11 +2,28 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { StationAmenity, StationDetail } from "@/lib/types";
+import type { PanelState, StationAmenity, StationDetail } from "@/lib/types";
 import { StationTypeBadge, SeedDataNotice } from "@/components/ui/Badge";
 import { Tooltip } from "@/components/ui/Tooltip";
 
-export function StationDetailPanel({ scno, onClose }: { scno: string; onClose: () => void }) {
+function backLabel(previousPanel: PanelState): string {
+  if (previousPanel.type === "area") return `Back to ${previousPanel.district}`;
+  if (previousPanel.type === "landmark") return `Back to ${previousPanel.query}`;
+  if (previousPanel.type === "nearby-analysis") return "Back to Nearby Analysis";
+  return "Back";
+}
+
+export function StationDetailPanel({
+  scno,
+  onClose,
+  previousPanel,
+  onBack,
+}: {
+  scno: string;
+  onClose: () => void;
+  previousPanel: PanelState | null;
+  onBack: () => void;
+}) {
   const [station, setStation] = useState<StationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -53,6 +70,14 @@ export function StationDetailPanel({ scno, onClose }: { scno: string; onClose: (
 
   return (
     <div className="flex h-full flex-col overflow-y-auto p-6">
+      {previousPanel && (
+        <button
+          onClick={onBack}
+          className="mb-3 self-start font-mono text-[10px] text-mint-deep hover:underline"
+        >
+          ← {backLabel(previousPanel)}
+        </button>
+      )}
       <div className="flex items-start justify-between">
         <div>
           <div className="vc-id flex items-center gap-2">

@@ -147,6 +147,18 @@
     0 4px 10px rgb(0 24 25 / 0.35);
 }
 
+/* Currently-open station's marker — overrides ht/pending/default alike (must stay
+   after those rules for cascade priority) so the map always shows which marker
+   the open side panel corresponds to. */
+.vc-dot.selected {
+  background: var(--color-mint-bright);
+  border: 3px solid var(--color-ink);
+  box-shadow:
+    0 0 0 3px var(--color-mint-bright),
+    0 4px 12px rgb(0 24 25 / 0.45);
+  z-index: 10000;
+}
+
 /* Predict-new-site candidate marker — not a real station, so deliberately
    distinct: white fill, dashed mint ring, pulsing to read as "draggable". */
 .vc-dot.predict {

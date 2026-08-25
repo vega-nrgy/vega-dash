@@ -13,6 +13,15 @@ import { stationDivIcon, stationPopupHtml } from "./StationMarkerIcon";
 const DEFAULT_CENTER: [number, number] = [17.9784, 79.5941];
 const DEFAULT_ZOOM = 7;
 
+// SidePanel's `max-w-md` (28rem). The map container spans the full width behind
+// the panel, so Leaflet's own notion of "center" sits under the panel unless we
+// account for it -- see the focus effect below, which is the fix for "opening a
+// station's panel doesn't actually center it in the visible map."
+const SIDE_PANEL_WIDTH_PX = 448;
+
+// Floor, not a forced value, for station-panel focus — see the focus effect below.
+const MIN_STATION_ZOOM = 15;
+
 export type MapFocus =
   | { kind: "point"; lat: number; lon: number; zoom?: number }
   | { kind: "bounds"; bounds: [[number, number], [number, number]] };
@@ -33,6 +42,10 @@ interface StationMapProps {
   /** Nearby-station-analysis radius, shown as a dashed circle so the analyzed area is visible
    * on the map. Updates live as the panel's radius slider moves (see DashboardShell). */
   radiusCircle?: { lat: number; lon: number; radiusM: number } | null;
+  /** unique_scno of the station whose side panel is currently open, or null. Highlighted
+   * with a distinct marker style (see StationMarkerIcon's `selected`) so it's clear which
+   * marker the open panel corresponds to. */
+  selectedScno?: string | null;
 }
 
 const predictDivIcon = L.divIcon({
@@ -50,6 +63,7 @@ export default function StationMap({
   predictMarker,
   onPredictMarkerDrag,
   radiusCircle,
+  selectedScno,
 }: StationMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -132,7 +146,7 @@ export default function StationMap({
       .filter((s) => Number.isFinite(s.latitude) && Number.isFinite(s.longitude))
       .map((station) => {
         const marker = L.marker([station.latitude, station.longitude], {
-          icon: stationDivIcon(station),
+          icon: stationDivIcon(station, station.unique_scno === selectedScno),
         });
         marker.bindPopup(stationPopupHtml(station));
         marker.on("click", () => onSelectRef.current(station.unique_scno));
@@ -140,7 +154,7 @@ export default function StationMap({
       });
 
     cluster.addLayers(markers);
-  }, [stations]);
+  }, [stations, selectedScno]);
 
   // React to programmatic focus changes (area/landmark/station/predict results).
   // Deliberately independent of predictMarker — this only fires from the initial
@@ -148,15 +162,32 @@ export default function StationMap({
   // the predict marker or typing new lat/lon never yanks the map view around.
   useEffect(() => {
     if (!focus || !mapRef.current) return;
+    const map = mapRef.current;
     if (focus.kind === "bounds") {
-      mapRef.current.flyToBounds(focus.bounds, { padding: [48, 48], duration: 0.6 });
-    } else {
-      // Falls back to the map's current zoom (not a hardcoded default) so a station-click
-      // focus (which omits zoom) re-centers without changing the zoom level. Other focus
-      // kinds (landmark/predict-new-site/nearby-analysis) always pass an explicit zoom.
-      mapRef.current.flyTo([focus.lat, focus.lon], focus.zoom ?? mapRef.current.getZoom(), {
+      // Bias the fitted bounds away from the side panel's side, same reasoning as the
+      // point case below -- otherwise "fit to bounds" centers within the FULL container
+      // width, half of which is covered by the panel.
+      map.flyToBounds(focus.bounds, {
+        paddingTopLeft: [48, 48],
+        paddingBottomRight: [48 + SIDE_PANEL_WIDTH_PX, 48],
         duration: 0.6,
       });
+    } else {
+      // Falls back to the map's current zoom (not a hardcoded default) so a station-click
+      // focus (which omits zoom) doesn't zoom OUT if already zoomed in closer than
+      // MIN_STATION_ZOOM. But it does floor at MIN_STATION_ZOOM: selecting a station from
+      // a list (area/nearby-analysis) can happen at any inherited zoom (e.g. a city-level
+      // area-bounds fit), and below that floor the target stays absorbed into a marker
+      // cluster bubble — neither centered nor visible/highlighted individually. Other
+      // focus kinds (landmark/predict-new-site/nearby-analysis) always pass an explicit zoom.
+      const zoom = focus.zoom ?? Math.max(map.getZoom(), MIN_STATION_ZOOM);
+      // flyTo centers its target on the map container's true geometric center, which
+      // sits under the side panel (a same-size overlay, not a layout sibling that
+      // shrinks the map). Shift the target right in pixel space by half the panel's
+      // width so the point ends up centered in the actually-visible map area instead.
+      const targetPoint = map.project([focus.lat, focus.lon], zoom).add([SIDE_PANEL_WIDTH_PX / 2, 0]);
+      const adjustedCenter = map.unproject(targetPoint, zoom);
+      map.flyTo(adjustedCenter, zoom, { duration: 0.6 });
     }
   }, [focus]);
 

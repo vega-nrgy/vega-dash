@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { SideNav } from "@/components/nav/SideNav";
 import { SearchBar } from "@/components/search/SearchBar";
 import { SidePanel } from "@/components/panel/SidePanel";
@@ -20,11 +20,29 @@ const DEFAULT_RADIUS_M = 2000;
 const NEARBY_DEFAULT_RADIUS_M = 5000;
 
 export function DashboardShell({ stations }: { stations: StationMarkerRow[] }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [filters, setFilters] = useState<MapFilters>(DEFAULT_MAP_FILTERS);
 
-  const panel = useMemo<PanelState>(() => parsePanelState(searchParams), [searchParams]);
+  // Seeded once from the request's search params -- useSearchParams() is correct
+  // even during SSR, so a shared deep link (e.g. ?panel=station&scno=X) still
+  // renders the right panel on first paint with no hydration mismatch. NOT
+  // reactively re-derived from it after that, though: every subsequent panel
+  // change is local state, synced to the URL via a plain history.pushState (see
+  // setPanel) instead of next/navigation's router.push. router.push was forcing
+  // a full RSC round-trip to the server on every station click, even though
+  // nothing server-side reads this state (page.tsx never reads searchParams) --
+  // confirmed by profiling: a `_rsc=` request fired ~130ms before any visual
+  // feedback appeared. That round trip was the entire "clicking a station feels
+  // unresponsive" bug. popstate below covers browser back/forward.
+  const [panel, setPanelState] = useState<PanelState>(() => parsePanelState(searchParams));
+
+  useEffect(() => {
+    const onPopState = () => {
+      setPanelState(parsePanelState(new URLSearchParams(window.location.search)));
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   const filteredStations = useMemo(
     () =>
@@ -39,42 +57,51 @@ export function DashboardShell({ stations }: { stations: StationMarkerRow[] }) {
     [stations, filters]
   );
 
-  const setPanel = useCallback(
-    (next: PanelState) => {
-      const params = new URLSearchParams();
-      if (next.type === "station") {
-        params.set("panel", "station");
-        params.set("scno", next.scno);
-      } else if (next.type === "area") {
-        params.set("panel", "area");
-        params.set("district", next.district);
-        if (next.bounds) {
-          params.set(
-            "bounds",
-            `${next.bounds[0][0]},${next.bounds[0][1]},${next.bounds[1][0]},${next.bounds[1][1]}`
-          );
-        }
-      } else if (next.type === "landmark") {
-        params.set("panel", "landmark");
-        params.set("q", next.query);
-        params.set("lat", String(next.lat));
-        params.set("lon", String(next.lon));
-        params.set("radiusM", String(next.radiusM));
-      } else if (next.type === "predict-new-site") {
-        params.set("panel", "predict-new-site");
-        params.set("lat", String(next.lat));
-        params.set("lon", String(next.lon));
-      } else if (next.type === "nearby-analysis") {
-        params.set("panel", "nearby-analysis");
-        params.set("lat", String(next.lat));
-        params.set("lon", String(next.lon));
-        params.set("radiusM", String(next.radiusM));
+  // Single-level "back" target — set only by handleSelectStation when opening a
+  // station from within a list-bearing panel (area/landmark/nearby-analysis), and
+  // consumed (cleared) by any panel transition other than opening a station, so it
+  // never lingers stale across an unrelated right-click or new search.
+  const [previousPanel, setPreviousPanel] = useState<PanelState | null>(null);
+
+  const setPanel = useCallback((next: PanelState) => {
+    if (next.type !== "station") {
+      setPreviousPanel(null);
+    }
+    setPanelState(next);
+    const params = new URLSearchParams();
+    if (next.type === "station") {
+      params.set("panel", "station");
+      params.set("scno", next.scno);
+    } else if (next.type === "area") {
+      params.set("panel", "area");
+      params.set("district", next.district);
+      if (next.bounds) {
+        params.set(
+          "bounds",
+          `${next.bounds[0][0]},${next.bounds[0][1]},${next.bounds[1][0]},${next.bounds[1][1]}`
+        );
       }
-      const qs = params.toString();
-      router.push(qs ? `/?${qs}` : "/", { scroll: false });
-    },
-    [router]
-  );
+    } else if (next.type === "landmark") {
+      params.set("panel", "landmark");
+      params.set("q", next.query);
+      params.set("lat", String(next.lat));
+      params.set("lon", String(next.lon));
+      params.set("radiusM", String(next.radiusM));
+    } else if (next.type === "predict-new-site") {
+      params.set("panel", "predict-new-site");
+      params.set("lat", String(next.lat));
+      params.set("lon", String(next.lon));
+    } else if (next.type === "nearby-analysis") {
+      params.set("panel", "nearby-analysis");
+      params.set("lat", String(next.lat));
+      params.set("lon", String(next.lon));
+      params.set("radiusM", String(next.radiusM));
+    }
+    const qs = params.toString();
+    // Plain history.pushState, not next/navigation's router.push -- see the
+    // `panel` state comment above for why (router.push forces an RSC round trip).
+    window.history.pushState(null, "", qs ? `/?${qs}` : "/");
+  }, []);
 
   // predictCoords is deliberately NOT URL state — it's the live, editable candidate
   // point (drag the marker or type into the panel's lat/lon inputs). panel.lat/lon
@@ -99,9 +126,20 @@ export function DashboardShell({ stations }: { stations: StationMarkerRow[] }) {
   }, [setPanel]);
 
   const handleSelectStation = useCallback(
-    (scno: string) => setPanel({ type: "station", scno }),
-    [setPanel]
+    (scno: string) => {
+      // Capture "where we came from" only for list-bearing panels — going station
+      // A -> station B (e.g. via search) has no meaningful "back to A" concept.
+      if (panel.type === "area" || panel.type === "landmark" || panel.type === "nearby-analysis") {
+        setPreviousPanel(panel);
+      }
+      setPanel({ type: "station", scno });
+    },
+    [panel, setPanel]
   );
+
+  const handleBack = useCallback(() => {
+    if (previousPanel) setPanel(previousPanel);
+  }, [previousPanel, setPanel]);
 
   const handleRightClick = useCallback(
     (lat: number, lon: number) => {
@@ -217,6 +255,8 @@ export function DashboardShell({ stations }: { stations: StationMarkerRow[] }) {
     return null;
   }, [panel, stations]);
 
+  const selectedScno = panel.type === "station" ? panel.scno : null;
+
   return (
     <div className="flex h-screen w-screen overflow-hidden">
       <SideNav
@@ -239,6 +279,7 @@ export function DashboardShell({ stations }: { stations: StationMarkerRow[] }) {
               ? { lat: panel.lat, lon: panel.lon, radiusM: nearbyRadiusPreview ?? panel.radiusM }
               : null
           }
+          selectedScno={selectedScno}
         />
         <div className="absolute left-4 top-4 z-[999] w-full max-w-md">
           <SearchBar onResolved={handleSearchResolved} />
@@ -277,6 +318,8 @@ export function DashboardShell({ stations }: { stations: StationMarkerRow[] }) {
           onNearbyRadiusCommit={handleNearbyRadiusCommit}
           predictCoords={predictCoords}
           onPredictCoordsChange={handlePredictCoordsChange}
+          previousPanel={previousPanel}
+          onBack={handleBack}
         />
       </div>
     </div>

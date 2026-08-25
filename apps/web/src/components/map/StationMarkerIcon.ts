@@ -1,21 +1,27 @@
 import L from "leaflet";
 import type { StationMarkerRow } from "@/lib/types";
 
-/** Brand marker icon — ports `.vc-marker`/`.vc-dot` from web-styles.css directly. */
-export function stationDivIcon(station: StationMarkerRow): L.DivIcon {
+/** Brand marker icon — ports `.vc-marker`/`.vc-dot` from web-styles.css directly.
+ * `selected` highlights the station whose side panel is currently open (see
+ * DashboardShell's selectedScno) — bigger + a distinct ring, layered on top of
+ * whatever base state class (ht/pending/default) already applies. */
+export function stationDivIcon(station: StationMarkerRow, selected = false): L.DivIcon {
   const dotClass =
     station.status !== "EXISTING"
       ? "vc-dot pending"
       : station.station_type === "HT"
         ? "vc-dot ht"
         : "vc-dot";
+  const className = selected ? `${dotClass} selected` : dotClass;
+  const size = selected ? 26 : 18;
+  const anchor = size / 2;
 
   return L.divIcon({
     className: "vc-marker",
-    html: `<div class="${dotClass}"></div>`,
-    iconSize: [18, 18],
-    iconAnchor: [9, 9],
-    popupAnchor: [0, -9],
+    html: `<div class="${className}"></div>`,
+    iconSize: [size, size],
+    iconAnchor: [anchor, anchor],
+    popupAnchor: [0, -anchor],
   });
 }
 
