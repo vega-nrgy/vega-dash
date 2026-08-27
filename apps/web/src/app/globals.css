@@ -159,6 +159,23 @@
   z-index: 10000;
 }
 
+/* Nearby-analysis radius resize handle — sits on the dashed circle's edge (see
+   StationMap's radiusCircle effect), a second way to change the radius alongside
+   the panel's slider. */
+.vc-radius-handle {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #fff;
+  border: 3px solid var(--color-mint-deep);
+  box-shadow: 0 2px 8px rgb(0 24 25 / 0.4);
+  cursor: grab;
+}
+
+.vc-radius-handle:active {
+  cursor: grabbing;
+}
+
 /* Predict-new-site candidate marker — not a real station, so deliberately
    distinct: white fill, dashed mint ring, pulsing to read as "draggable". */
 .vc-dot.predict {

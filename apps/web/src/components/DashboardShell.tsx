@@ -279,6 +279,7 @@ export function DashboardShell({ stations }: { stations: StationMarkerRow[] }) {
               ? { lat: panel.lat, lon: panel.lon, radiusM: nearbyRadiusPreview ?? panel.radiusM }
               : null
           }
+          onRadiusCircleCommit={handleNearbyRadiusCommit}
           selectedScno={selectedScno}
         />
         <div className="absolute left-4 top-4 z-[999] w-full max-w-md">

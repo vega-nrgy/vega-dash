@@ -124,6 +124,29 @@ export interface CpoMatchProposal {
   };
 }
 
+/** Full per-station row for the /admin/export "dump to Excel" tool — flat and
+ * numeric-friendly by design so filter comparisons and the exported spreadsheet
+ * columns are 1:1 with this shape. See lib/export/attributes.ts. */
+export interface ExportableStation {
+  unique_scno: string;
+  name: string;
+  station_type: StationType;
+  status: string | null;
+  district: string | null;
+  location_class: LocationClass | null;
+  discom: string | null;
+  operator: string | null;
+  cpo_brand: string | null;
+  category_bucket: CategoryBucket;
+  contracted_load_kva: number | null;
+  avg_units_kwh: number | null;
+  last_month_units_kwh: number | null;
+  bill_count: number;
+  rating: number | null;
+  latitude: number;
+  longitude: number;
+}
+
 export interface AreaMetrics {
   district: string;
   station_count: number;

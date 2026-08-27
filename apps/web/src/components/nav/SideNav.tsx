@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { label: "Map", href: "/", icon: "🗺" },
   { label: "Pipeline", href: "/admin/pipeline", icon: "⚙" },
   { label: "CPO Matches", href: "/admin/cpo-matches", icon: "🔗" },
+  { label: "Dump to Excel", href: "/admin/export", icon: "⬇" },
 ];
 
 interface Chip<T extends string> {

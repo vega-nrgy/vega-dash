@@ -3,6 +3,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   AreaMetrics,
   CategoryBucket,
+  ExportableStation,
   NearbyStationsResult,
   NearbyStationWithBilling,
   PerformanceTier,
@@ -313,4 +314,54 @@ export async function getDistrictList(): Promise<string[]> {
   if (error) throw error;
   const set = new Set((data ?? []).map((r) => r.district).filter(Boolean) as string[]);
   return Array.from(set).sort();
+}
+
+/**
+ * Full per-station dataset for the /admin/export tool. Separate from
+ * getStationMarkers() (which stays deliberately lightweight for the map's
+ * every-load fetch) since this needs the billing/rating joins for every one of
+ * the ~979 stations, not just the map's has_history/performance_tier summary.
+ */
+export async function getExportableStations(): Promise<ExportableStation[]> {
+  const supabase = getSupabaseServerClient();
+  const [
+    { data: stationRows, error: stationsError },
+    { data: billingRows, error: billingError },
+    { data: ratingRows, error: ratingError },
+  ] = await Promise.all([
+    supabase
+      .from("stations")
+      .select(
+        "unique_scno, name, station_type, status, district, location_class, discom, operator, cpo_brand, contracted_load_kva, latitude, longitude"
+      )
+      .order("unique_scno"),
+    supabase.from("station_billing_summary").select("station_id, avg_units_kwh, last_month_units_kwh, bill_count"),
+    supabase.from("station_places_cache").select("station_id, rating"),
+  ]);
+  if (stationsError) throw stationsError;
+  if (billingError) throw billingError;
+  if (ratingError) throw ratingError;
+
+  const billing = new Map((billingRows ?? []).map((r) => [r.station_id, r]));
+  const ratings = new Map((ratingRows ?? []).map((r) => [r.station_id, r.rating]));
+
+  return (stationRows ?? []).map((s) => ({
+    unique_scno: s.unique_scno,
+    name: s.name,
+    station_type: s.station_type,
+    status: s.status,
+    district: s.district,
+    location_class: s.location_class,
+    discom: s.discom,
+    operator: s.operator,
+    cpo_brand: s.cpo_brand,
+    category_bucket: computeCategoryBucket(s.operator),
+    contracted_load_kva: s.contracted_load_kva,
+    avg_units_kwh: billing.get(s.unique_scno)?.avg_units_kwh ?? null,
+    last_month_units_kwh: billing.get(s.unique_scno)?.last_month_units_kwh ?? null,
+    bill_count: billing.get(s.unique_scno)?.bill_count ?? 0,
+    rating: ratings.get(s.unique_scno) ?? null,
+    latitude: s.latitude,
+    longitude: s.longitude,
+  }));
 }

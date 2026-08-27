@@ -22,6 +22,11 @@ const SIDE_PANEL_WIDTH_PX = 448;
 // Floor, not a forced value, for station-panel focus — see the focus effect below.
 const MIN_STATION_ZOOM = 15;
 
+// Matches the fixed zoom DashboardShell's focus computation uses for the
+// nearby-analysis panel type. Duplicated here (rather than threaded through props)
+// for the radius handle's clamping math — see the radiusCircle effect below.
+const NEARBY_ANALYSIS_ZOOM = 14;
+
 export type MapFocus =
   | { kind: "point"; lat: number; lon: number; zoom?: number }
   | { kind: "bounds"; bounds: [[number, number], [number, number]] };
@@ -42,6 +47,12 @@ interface StationMapProps {
   /** Nearby-station-analysis radius, shown as a dashed circle so the analyzed area is visible
    * on the map. Updates live as the panel's radius slider moves (see DashboardShell). */
   radiusCircle?: { lat: number; lon: number; radiusM: number } | null;
+  /** Fired once when the circle's own resize handle (see below) is released. Live feedback
+   * during the drag itself (circle resize, tooltip) is purely imperative Leaflet — not
+   * bubbled to React until release — so the effect below never fights the user's own drag
+   * by snapping the handle back to its canonical position mid-gesture. Reuses the same
+   * commit path the radius slider already uses (see DashboardShell). */
+  onRadiusCircleCommit?: (radiusM: number) => void;
   /** unique_scno of the station whose side panel is currently open, or null. Highlighted
    * with a distinct marker style (see StationMarkerIcon's `selected`) so it's clear which
    * marker the open panel corresponds to. */
@@ -63,6 +74,7 @@ export default function StationMap({
   predictMarker,
   onPredictMarkerDrag,
   radiusCircle,
+  onRadiusCircleCommit,
   selectedScno,
 }: StationMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -70,14 +82,21 @@ export default function StationMap({
   const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
   const predictMarkerRef = useRef<L.Marker | null>(null);
   const radiusCircleRef = useRef<L.Circle | null>(null);
+  const radiusHandleRef = useRef<L.Marker | null>(null);
+  // True while the user is actively dragging the radius handle -- guards the
+  // effect below from snapping the handle back to its canonical position mid-drag
+  // in response to its own dragend-triggered prop update.
+  const draggingRadiusHandleRef = useRef(false);
   const onSelectRef = useRef(onSelectStation);
   const onContextMenuRef = useRef(onContextMenu);
   const onPredictMarkerDragRef = useRef(onPredictMarkerDrag);
+  const onRadiusCircleCommitRef = useRef(onRadiusCircleCommit);
 
   useEffect(() => {
     onSelectRef.current = onSelectStation;
     onContextMenuRef.current = onContextMenu;
     onPredictMarkerDragRef.current = onPredictMarkerDrag;
+    onRadiusCircleCommitRef.current = onRadiusCircleCommit;
   });
 
   useEffect(() => {
@@ -226,7 +245,8 @@ export default function StationMap({
   // Dashed circle showing the nearby-analysis radius. Cheap to update on every slider
   // tick (setLatLng/setRadius, no re-render of markers or a new fetch) — see
   // NearbyAnalysisPanel, which filters an already-fetched station list client-side
-  // for the same reason.
+  // for the same reason. Also carries a draggable resize handle (below) as a second,
+  // map-native way to change the radius alongside the panel's slider.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -236,28 +256,114 @@ export default function StationMap({
         map.removeLayer(radiusCircleRef.current);
         radiusCircleRef.current = null;
       }
+      if (radiusHandleRef.current) {
+        map.removeLayer(radiusHandleRef.current);
+        radiusHandleRef.current = null;
+      }
       return;
     }
 
-    const center: L.LatLngExpression = [radiusCircle.lat, radiusCircle.lon];
+    const center = L.latLng(radiusCircle.lat, radiusCircle.lon);
+    // Canonical handle position: due west of center, at the current radius. West (not
+    // east) so it stays away from the side panel covering the map's right side, and
+    // "canonical" so external radius changes (the slider) reposition the handle
+    // predictably instead of leaving it wherever a previous drag happened to end.
+    //
+    // Clamped so a large radius can't push the handle past the map container's own
+    // left edge -- behind SideNav, a real DOM sibling that swallows mouse events
+    // before Leaflet ever sees them, not just a z-index quirk. Deliberately computed
+    // via project()/unproject() at NEARBY_ANALYSIS_ZOOM rather than
+    // latLngToContainerPoint()/getSize() against the map's LIVE view: this effect and
+    // the focus effect above both fire from the same render, but focus's flyTo is a
+    // 600ms animation -- sampling the live view here would race it and clamp against
+    // the map's pre-animation position/zoom, not where it's actually flying to. Working
+    // in zoom-fixed projected pixels (pure math, no dependency on live pan/zoom state)
+    // sidesteps that race entirely. When clamped, the handle sits at a fixed safe
+    // distance rather than exactly on the circle's edge; the circle itself always still
+    // renders at the true radius regardless.
+    const handleLatLngFor = (radiusM: number) => {
+      const zoom = NEARBY_ANALYSIS_ZOOM;
+      const metersPerDegreeLon = 111320 * Math.cos((center.lat * Math.PI) / 180);
+      const desired = L.latLng(center.lat, center.lng - radiusM / metersPerDegreeLon);
+
+      const mapWidth = map.getSize().x;
+      const margin = 28;
+      // By construction (see the focus effect's SIDE_PANEL_WIDTH_PX offset), `center`
+      // ends up sitting this far right of the map container's own left edge once the
+      // flyTo completes.
+      const finalCenterX = mapWidth / 2 - SIDE_PANEL_WIDTH_PX / 2;
+
+      const centerProjected = map.project(center, zoom);
+      const desiredProjected = map.project(desired, zoom);
+      const westOffsetPx = centerProjected.x - desiredProjected.x;
+
+      const finalHandleX = finalCenterX - westOffsetPx;
+      const clampedX = Math.min(Math.max(finalHandleX, margin), mapWidth - margin);
+      const clampedOffsetPx = finalCenterX - clampedX;
+
+      return map.unproject(L.point(centerProjected.x - clampedOffsetPx, centerProjected.y), zoom);
+    };
 
     if (radiusCircleRef.current) {
       radiusCircleRef.current.setLatLng(center);
       radiusCircleRef.current.setRadius(radiusCircle.radiusM);
+    } else {
+      const circle = L.circle(center, {
+        radius: radiusCircle.radiusM,
+        color: "#00775c",
+        weight: 2,
+        dashArray: "8 6",
+        fillColor: "#00775c",
+        fillOpacity: 0.06,
+        interactive: false,
+      });
+      circle.addTo(map);
+      radiusCircleRef.current = circle;
+    }
+
+    // Never fight the user's own in-progress drag by snapping the handle back to the
+    // canonical point mid-gesture -- only reposition it for externally-driven changes
+    // (the slider, or a new right-click center).
+    if (draggingRadiusHandleRef.current) return;
+
+    if (radiusHandleRef.current) {
+      radiusHandleRef.current.setLatLng(handleLatLngFor(radiusCircle.radiusM));
       return;
     }
 
-    const circle = L.circle(center, {
-      radius: radiusCircle.radiusM,
-      color: "#00775c",
-      weight: 2,
-      dashArray: "8 6",
-      fillColor: "#00775c",
-      fillOpacity: 0.06,
-      interactive: false,
+    const handle = L.marker(handleLatLngFor(radiusCircle.radiusM), {
+      icon: L.divIcon({
+        className: "vc-marker",
+        html: `<div class="vc-radius-handle"></div>`,
+        iconSize: [14, 14],
+        iconAnchor: [7, 7],
+      }),
+      draggable: true,
+      zIndexOffset: 900,
     });
-    circle.addTo(map);
-    radiusCircleRef.current = circle;
+    handle.bindTooltip("Drag to resize radius", { direction: "right", offset: [10, 0] });
+
+    handle.on("dragstart", () => {
+      draggingRadiusHandleRef.current = true;
+      handle.openTooltip();
+    });
+    handle.on("drag", () => {
+      const circle = radiusCircleRef.current;
+      if (!circle) return;
+      const radiusM = circle.getLatLng().distanceTo(handle.getLatLng());
+      circle.setRadius(radiusM);
+      handle.setTooltipContent(`${(radiusM / 1000).toFixed(1)} km`);
+    });
+    handle.on("dragend", () => {
+      draggingRadiusHandleRef.current = false;
+      const circle = radiusCircleRef.current;
+      if (!circle) return;
+      const radiusM = circle.getLatLng().distanceTo(handle.getLatLng());
+      onRadiusCircleCommitRef.current?.(radiusM);
+    });
+
+    handle.addTo(map);
+    radiusHandleRef.current = handle;
   }, [radiusCircle]);
 
   return <div ref={containerRef} className="h-full w-full" />;
