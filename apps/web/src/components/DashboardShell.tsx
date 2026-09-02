@@ -19,6 +19,23 @@ const DEFAULT_RADIUS_M = 2000;
 // for nearby-station-analysis to default to a wider 5km radius.
 const NEARBY_DEFAULT_RADIUS_M = 5000;
 
+/** Square bounding box touching a circle at its N/S/E/W points -- used to bounds-fit
+ * the nearby-analysis view to the full circle regardless of radius (see `focus` below). */
+function circleBounds(
+  lat: number,
+  lon: number,
+  radiusM: number
+): [[number, number], [number, number]] {
+  const metersPerDegreeLat = 111320;
+  const metersPerDegreeLon = 111320 * Math.cos((lat * Math.PI) / 180);
+  const latDelta = radiusM / metersPerDegreeLat;
+  const lonDelta = radiusM / metersPerDegreeLon;
+  return [
+    [lat - latDelta, lon - lonDelta],
+    [lat + latDelta, lon + lonDelta],
+  ];
+}
+
 export function DashboardShell({ stations }: { stations: StationMarkerRow[] }) {
   const searchParams = useSearchParams();
   const [filters, setFilters] = useState<MapFilters>(DEFAULT_MAP_FILTERS);
@@ -52,6 +69,17 @@ export function DashboardShell({ stations }: { stations: StationMarkerRow[] }) {
         if (filters.history === "none" && s.has_history) return false;
         if (filters.tier !== "all" && s.performance_tier !== filters.tier) return false;
         if (filters.categoryBucket !== "all" && s.category_bucket !== filters.categoryBucket) return false;
+        // Custom performance range, on top of the fixed tier chips above -- strict
+        // > / < (not >=/<=), matching the tier chips and export-page filter row
+        // pattern. A station with no billing data can't satisfy either bound.
+        if (filters.performanceMin !== "") {
+          const min = Number(filters.performanceMin);
+          if (!Number.isNaN(min) && (s.avg_units_kwh == null || s.avg_units_kwh <= min)) return false;
+        }
+        if (filters.performanceMax !== "") {
+          const max = Number(filters.performanceMax);
+          if (!Number.isNaN(max) && (s.avg_units_kwh == null || s.avg_units_kwh >= max)) return false;
+        }
         return true;
       }),
     [stations, filters]
@@ -240,8 +268,18 @@ export function DashboardShell({ stations }: { stations: StationMarkerRow[] }) {
   );
 
   const focus = useMemo((): MapFocus | null => {
-    if (panel.type === "landmark" || panel.type === "predict-new-site" || panel.type === "nearby-analysis") {
+    if (panel.type === "landmark" || panel.type === "predict-new-site") {
       return { kind: "point", lat: panel.lat, lon: panel.lon, zoom: 14 };
+    }
+    if (panel.type === "nearby-analysis") {
+      // Bounds-fit to the circle's full extent (not a fixed zoom) -- the radius
+      // varies (slider or the map's own drag handle), and a fixed zoom meant a big
+      // enough radius rendered larger than the visible map, leaving the resize
+      // handle's true edge position permanently mismatched once the user zoomed
+      // out far enough to see the whole circle. Re-fitting on every radius commit
+      // keeps the full circle (and the handle sitting on its true edge) always
+      // in view, at whatever zoom that takes -- see StationMap's radiusCircle effect.
+      return { kind: "bounds", bounds: circleBounds(panel.lat, panel.lon, panel.radiusM) };
     }
     if (panel.type === "station") {
       const s = stations.find((st) => st.unique_scno === panel.scno);

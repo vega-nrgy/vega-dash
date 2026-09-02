@@ -34,6 +34,10 @@ export interface StationMarkerRow {
   has_history?: boolean;
   performance_tier?: PerformanceTier;
   category_bucket?: CategoryBucket;
+  /** Avg. billed kWh/month — the same value performance_tier is bucketed from.
+   * Shipped alongside the tier so the custom performance range filter (see
+   * MapFilters) can compare against it directly instead of just the tier bucket. */
+  avg_units_kwh?: number | null;
 }
 
 export interface StationCharger {
@@ -196,6 +200,12 @@ export interface MapFilters {
   history: "all" | "has" | "none";
   tier: "all" | PerformanceTier;
   categoryBucket: "all" | CategoryBucket;
+  /** Custom performance range, on top of the fixed tier chips above -- both empty
+   * strings by default (no filter). String, not number, so an input can sit
+   * momentarily empty/invalid while typing without forcing a value. Compared
+   * against avg_units_kwh with strict > / < (not >=/<=), per how it was asked for. */
+  performanceMin: string;
+  performanceMax: string;
 }
 
 export const DEFAULT_MAP_FILTERS: MapFilters = {
@@ -203,6 +213,8 @@ export const DEFAULT_MAP_FILTERS: MapFilters = {
   history: "all",
   tier: "all",
   categoryBucket: "all",
+  performanceMin: "",
+  performanceMax: "",
 };
 
 export type SearchResolvedAs = "id" | "area" | "name" | "landmark" | "none";

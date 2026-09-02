@@ -100,6 +100,7 @@ export async function getStationMarkers(): Promise<StationMarkerRow[]> {
     has_history: billing.get(r.unique_scno)?.hasHistory ?? false,
     performance_tier: tiers.get(r.unique_scno) ?? "no_data",
     category_bucket: computeCategoryBucket(r.operator),
+    avg_units_kwh: billing.get(r.unique_scno)?.avgKwh ?? null,
   }));
 }
 

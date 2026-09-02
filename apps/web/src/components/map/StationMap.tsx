@@ -22,11 +22,6 @@ const SIDE_PANEL_WIDTH_PX = 448;
 // Floor, not a forced value, for station-panel focus — see the focus effect below.
 const MIN_STATION_ZOOM = 15;
 
-// Matches the fixed zoom DashboardShell's focus computation uses for the
-// nearby-analysis panel type. Duplicated here (rather than threaded through props)
-// for the radius handle's clamping math — see the radiusCircle effect below.
-const NEARBY_ANALYSIS_ZOOM = 14;
-
 export type MapFocus =
   | { kind: "point"; lat: number; lon: number; zoom?: number }
   | { kind: "bounds"; bounds: [[number, number], [number, number]] };
@@ -264,44 +259,23 @@ export default function StationMap({
     }
 
     const center = L.latLng(radiusCircle.lat, radiusCircle.lon);
-    // Canonical handle position: due west of center, at the current radius. West (not
-    // east) so it stays away from the side panel covering the map's right side, and
-    // "canonical" so external radius changes (the slider) reposition the handle
-    // predictably instead of leaving it wherever a previous drag happened to end.
+    // Canonical handle position: due west of center, at the TRUE radius (plain
+    // geography, no pixel/zoom math) -- west so it's the same side the "area" panel's
+    // bounds-fit already favors visually, and "canonical" so external radius changes
+    // (the slider) reposition the handle predictably instead of leaving it wherever a
+    // previous drag happened to end.
     //
-    // Clamped so a large radius can't push the handle past the map container's own
-    // left edge -- behind SideNav, a real DOM sibling that swallows mouse events
-    // before Leaflet ever sees them, not just a z-index quirk. Deliberately computed
-    // via project()/unproject() at NEARBY_ANALYSIS_ZOOM rather than
-    // latLngToContainerPoint()/getSize() against the map's LIVE view: this effect and
-    // the focus effect above both fire from the same render, but focus's flyTo is a
-    // 600ms animation -- sampling the live view here would race it and clamp against
-    // the map's pre-animation position/zoom, not where it's actually flying to. Working
-    // in zoom-fixed projected pixels (pure math, no dependency on live pan/zoom state)
-    // sidesteps that race entirely. When clamped, the handle sits at a fixed safe
-    // distance rather than exactly on the circle's edge; the circle itself always still
-    // renders at the true radius regardless.
+    // Deliberately NOT clamped in pixel space anymore -- an earlier version did that
+    // to keep the handle on-screen at a fixed zoom, but that permanently mismatched
+    // the handle's geographic position against the true radius: fine-looking at the
+    // original zoom, but visibly wrong (handle sitting inside the circle, not on its
+    // edge) once the user zoomed out far enough to see the whole circle. The real fix
+    // is upstream, in DashboardShell's `focus` -- nearby-analysis now bounds-fits the
+    // view to the circle's full extent on every radius change, so the true west point
+    // is always on-screen and this can just be honest geography.
     const handleLatLngFor = (radiusM: number) => {
-      const zoom = NEARBY_ANALYSIS_ZOOM;
       const metersPerDegreeLon = 111320 * Math.cos((center.lat * Math.PI) / 180);
-      const desired = L.latLng(center.lat, center.lng - radiusM / metersPerDegreeLon);
-
-      const mapWidth = map.getSize().x;
-      const margin = 28;
-      // By construction (see the focus effect's SIDE_PANEL_WIDTH_PX offset), `center`
-      // ends up sitting this far right of the map container's own left edge once the
-      // flyTo completes.
-      const finalCenterX = mapWidth / 2 - SIDE_PANEL_WIDTH_PX / 2;
-
-      const centerProjected = map.project(center, zoom);
-      const desiredProjected = map.project(desired, zoom);
-      const westOffsetPx = centerProjected.x - desiredProjected.x;
-
-      const finalHandleX = finalCenterX - westOffsetPx;
-      const clampedX = Math.min(Math.max(finalHandleX, margin), mapWidth - margin);
-      const clampedOffsetPx = finalCenterX - clampedX;
-
-      return map.unproject(L.point(centerProjected.x - clampedOffsetPx, centerProjected.y), zoom);
+      return L.latLng(center.lat, center.lng - radiusM / metersPerDegreeLon);
     };
 
     if (radiusCircleRef.current) {

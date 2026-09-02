@@ -94,7 +94,9 @@ export function SideNav({ filters, onFiltersChange, visibleCount, totalCount }: 
     filters.stationType !== "all" ||
     filters.history !== "all" ||
     filters.tier !== "all" ||
-    filters.categoryBucket !== "all";
+    filters.categoryBucket !== "all" ||
+    filters.performanceMin !== "" ||
+    filters.performanceMax !== "";
 
   return (
     <nav
@@ -149,6 +151,8 @@ export function SideNav({ filters, onFiltersChange, visibleCount, totalCount }: 
                     history: "all",
                     tier: "all",
                     categoryBucket: "all",
+                    performanceMin: "",
+                    performanceMax: "",
                   })
                 }
                 className="font-mono text-[10px] text-muted hover:text-ink hover:underline"
@@ -186,6 +190,27 @@ export function SideNav({ filters, onFiltersChange, visibleCount, totalCount }: 
               value={filters.tier}
               onChange={(tier) => onFiltersChange({ ...filters, tier })}
             />
+            <div className="pt-1">
+              <div className="text-[10px] text-muted">Custom range (avg. kWh/mo), on top of the above</div>
+              <div className="mt-1 flex items-center gap-1.5">
+                <span className="font-mono text-xs text-muted">&gt;</span>
+                <input
+                  type="number"
+                  value={filters.performanceMin}
+                  onChange={(e) => onFiltersChange({ ...filters, performanceMin: e.target.value })}
+                  placeholder="empty"
+                  className="w-full min-w-0 rounded-input border border-border bg-white px-2 py-1 text-xs"
+                />
+                <span className="font-mono text-xs text-muted">&lt;</span>
+                <input
+                  type="number"
+                  value={filters.performanceMax}
+                  onChange={(e) => onFiltersChange({ ...filters, performanceMax: e.target.value })}
+                  placeholder="empty"
+                  className="w-full min-w-0 rounded-input border border-border bg-white px-2 py-1 text-xs"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="space-y-1.5">
