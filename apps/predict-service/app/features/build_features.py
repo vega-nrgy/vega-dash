@@ -143,6 +143,19 @@ def build_training_frame(conn) -> tuple[pd.DataFrame, pd.Series]:
     df["steady_state_kwh"] = df["station_id"].map(steady_state)
     train_df = df[df["steady_state_kwh"].notna()].copy()
 
+    # psycopg returns Postgres `numeric` as Decimal, which pandas keeps as
+    # dtype 'object' rather than float64 — HistGradientBoostingRegressor
+    # needs real floats.
+    numeric_cols = (
+        "contracted_load_kva",
+        "max_charger_power_kw",
+        "highway_distance_m",
+        "steady_state_kwh",
+    )
+    for col in numeric_cols:
+        if col in train_df.columns:
+            train_df[col] = pd.to_numeric(train_df[col], errors="coerce")
+
     for col in ("district", "location_class", "dominant_charger_type"):
         if col in train_df.columns:
             train_df[col] = train_df[col].astype("category")
@@ -151,9 +164,9 @@ def build_training_frame(conn) -> tuple[pd.DataFrame, pd.Series]:
         train_df["has_4w_fast"] = False
     train_df["has_4w_fast"] = train_df["has_4w_fast"].fillna(False).astype(bool)
 
+    train_df = train_df.set_index("station_id", drop=False)
     y = train_df["steady_state_kwh"]
     drop_cols = ["steady_state_kwh", "station_id", "latitude", "longitude"]
     X = train_df.drop(columns=[c for c in drop_cols if c in train_df.columns])
-    X.index = train_df["station_id"]
 
     return X, y
