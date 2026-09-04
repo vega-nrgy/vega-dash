@@ -40,6 +40,34 @@ export interface StationMarkerRow {
   avg_units_kwh?: number | null;
 }
 
+/** A, B, C tender categories from ANNEXURE-IV — roughly govt HQ / substation-or-PACS /
+ * private-land, in descending order of civic footfall. Not related to CategoryBucket
+ * (that's derived from existing stations.operator; this comes straight off the tender). */
+export type PotentialSiteCategory = "A" | "B" | "C";
+
+/**
+ * A candidate EVCS site from the PM E Drive tender (ANNEXURE-IV — LIST OF EVCS,
+ * TGREDCO/EVI/PM E Drive/2026-27), not yet a built/live station. See
+ * lib/data/potential-sites.ts for the transcribed list and PotentialSitePanel/
+ * StationMap for how these render as a distinct marker layer from real stations.
+ */
+export interface PotentialSite {
+  id: string;
+  name: string;
+  category: PotentialSiteCategory;
+  cluster: number;
+  department: string;
+  latitude: number;
+  longitude: number;
+  chargers_2w3w: number;
+  chargers_4w_count: number;
+  chargers_4w_kw: number;
+  /** Model-predicted performance score for this candidate site — null until the
+   * predict-service model (apps/predict-service/app/model) has been trained and
+   * has scored it. See PotentialSitePopup for how the pending state renders. */
+  predicted_score: number | null;
+}
+
 export interface StationCharger {
   id: number;
   charger_type: string;

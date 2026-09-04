@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { MapFilters } from "@/lib/types";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { SignOutButton } from "@/components/nav/SignOutButton";
 
 const NAV_ITEMS = [
   { label: "Map", href: "/", icon: "🗺" },
@@ -47,6 +48,26 @@ const CATEGORY_CHIPS: Chip<MapFilters["categoryBucket"]>[] = [
   { value: "other", label: "Other" },
 ];
 
+/** PM E Drive tender candidate sites (ANNEXURE-IV) shown as a separate map overlay —
+ * see DashboardShell's potentialSiteFilters and StationMap's potentialSites layer.
+ * Independent of MapFilters: this toggles/filters an overlay, not the live stations. */
+export interface PotentialSiteFilters {
+  visible: boolean;
+  clusters: number[];
+}
+
+/** Matches `.vc-tender-marker.cluster-N` in globals.css, so the chip dot and the
+ * marker on the map are the same color for a given cluster. */
+const CLUSTER_COLORS: Record<number, string> = {
+  1: "#f2994a",
+  2: "#eb5757",
+  3: "#2f80ed",
+  4: "#9b51e0",
+  5: "#d4a900",
+};
+
+const CLUSTERS = [1, 2, 3, 4, 5];
+
 function ChipGroup<T extends string>({
   chips,
   value,
@@ -85,9 +106,22 @@ interface SideNavProps {
   onFiltersChange: (filters: MapFilters) => void;
   visibleCount: number;
   totalCount: number;
+  potentialSiteFilters: PotentialSiteFilters;
+  onPotentialSiteFiltersChange: (filters: PotentialSiteFilters) => void;
+  potentialSiteVisibleCount: number;
+  potentialSiteTotalCount: number;
 }
 
-export function SideNav({ filters, onFiltersChange, visibleCount, totalCount }: SideNavProps) {
+export function SideNav({
+  filters,
+  onFiltersChange,
+  visibleCount,
+  totalCount,
+  potentialSiteFilters,
+  onPotentialSiteFiltersChange,
+  potentialSiteVisibleCount,
+  potentialSiteTotalCount,
+}: SideNavProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   const hasActiveFilters =
@@ -225,11 +259,70 @@ export function SideNav({ filters, onFiltersChange, visibleCount, totalCount }: 
           <div className="border-t border-hairline pt-3 font-mono text-[10px] text-muted">
             Showing {visibleCount.toLocaleString()} of {totalCount.toLocaleString()} stations
           </div>
+
+          <div className="space-y-2 border-t border-hairline pt-4">
+            <div className="flex items-center justify-between">
+              <div className="chapter-label">Potential Sites (Tender)</div>
+              <button
+                type="button"
+                onClick={() =>
+                  onPotentialSiteFiltersChange({ ...potentialSiteFilters, visible: !potentialSiteFilters.visible })
+                }
+                aria-pressed={potentialSiteFilters.visible}
+                className={`rounded-input border px-2 py-1 text-[11px] font-medium transition-colors ${
+                  potentialSiteFilters.visible
+                    ? "border-mint-deep bg-mint-deep text-white"
+                    : "border-hairline bg-paper text-muted hover:bg-grey-soft"
+                }`}
+              >
+                {potentialSiteFilters.visible ? "Shown" : "Hidden"}
+              </button>
+            </div>
+            <p className="text-[10px] leading-snug text-muted">
+              PM E Drive tender candidate locations (ANNEXURE-IV), by cluster.
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {CLUSTERS.map((cluster) => {
+                const active = potentialSiteFilters.clusters.includes(cluster);
+                return (
+                  <button
+                    key={cluster}
+                    type="button"
+                    onClick={() =>
+                      onPotentialSiteFiltersChange({
+                        ...potentialSiteFilters,
+                        clusters: active
+                          ? potentialSiteFilters.clusters.filter((c) => c !== cluster)
+                          : [...potentialSiteFilters.clusters, cluster],
+                      })
+                    }
+                    aria-pressed={active}
+                    className={`flex items-center gap-1.5 rounded-input border px-2 py-1 text-[11px] font-medium transition-colors ${
+                      active
+                        ? "border-hairline bg-grey-soft text-ink"
+                        : "border-hairline bg-paper text-muted-onink opacity-60 hover:bg-grey-soft"
+                    }`}
+                  >
+                    <span
+                      aria-hidden
+                      className="inline-block h-2 w-2 rounded-full"
+                      style={{ backgroundColor: CLUSTER_COLORS[cluster] }}
+                    />
+                    Cluster {cluster}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="font-mono text-[10px] text-muted">
+              Showing {potentialSiteVisibleCount.toLocaleString()} of {potentialSiteTotalCount.toLocaleString()} candidates
+            </div>
+          </div>
         </div>
       )}
 
-      {collapsed ? (
-        <div className="mx-2 mb-4 mt-4">
+      <div className="mx-2 mb-4 mt-4 space-y-2">
+        <SignOutButton collapsed={collapsed} />
+        {collapsed ? (
           <Tooltip label="Expand navigation" side="right" className="w-full">
             <button
               onClick={() => setCollapsed(false)}
@@ -239,16 +332,16 @@ export function SideNav({ filters, onFiltersChange, visibleCount, totalCount }: 
               »
             </button>
           </Tooltip>
-        </div>
-      ) : (
-        <button
-          onClick={() => setCollapsed(true)}
-          aria-label="Collapse navigation"
-          className="mx-2 mb-4 mt-4 flex items-center justify-center rounded-input border border-hairline py-2 text-xs text-muted hover:bg-grey-soft"
-        >
-          « Collapse
-        </button>
-      )}
+        ) : (
+          <button
+            onClick={() => setCollapsed(true)}
+            aria-label="Collapse navigation"
+            className="flex w-full items-center justify-center rounded-input border border-hairline py-2 text-xs text-muted hover:bg-grey-soft"
+          >
+            « Collapse
+          </button>
+        )}
+      </div>
     </nav>
   );
 }

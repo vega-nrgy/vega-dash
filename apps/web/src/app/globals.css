@@ -205,3 +205,72 @@
   color: var(--color-mint-bright);
   font: 700 12px var(--font-mono);
 }
+
+/* PM E Drive tender candidate sites (ANNEXURE-IV) — a diamond, not a circle, so
+   they read as visually distinct from live `.vc-dot` stations even before color
+   registers. Color is per-cluster, matching the left panel's cluster filter. */
+.vc-tender-marker {
+  width: 13px;
+  height: 13px;
+  transform: rotate(45deg);
+  border: 2px solid #fff;
+  box-shadow: 0 3px 8px rgb(0 24 25 / 0.35);
+}
+
+.vc-tender-marker.cluster-1 {
+  background: #f2994a;
+  box-shadow:
+    0 0 0 1.5px #f2994a,
+    0 3px 8px rgb(0 24 25 / 0.35);
+}
+
+.vc-tender-marker.cluster-2 {
+  background: #eb5757;
+  box-shadow:
+    0 0 0 1.5px #eb5757,
+    0 3px 8px rgb(0 24 25 / 0.35);
+}
+
+.vc-tender-marker.cluster-3 {
+  background: #2f80ed;
+  box-shadow:
+    0 0 0 1.5px #2f80ed,
+    0 3px 8px rgb(0 24 25 / 0.35);
+}
+
+.vc-tender-marker.cluster-4 {
+  background: #9b51e0;
+  box-shadow:
+    0 0 0 1.5px #9b51e0,
+    0 3px 8px rgb(0 24 25 / 0.35);
+}
+
+.vc-tender-marker.cluster-5 {
+  background: #d4a900;
+  box-shadow:
+    0 0 0 1.5px #d4a900,
+    0 3px 8px rgb(0 24 25 / 0.35);
+}
+
+.vc-tender-chargers {
+  font: 400 11px var(--font-mono);
+  color: var(--color-ink-soft);
+  margin-top: 8px;
+}
+
+.vc-tender-predicted {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-hairline);
+}
+
+.vc-tender-pending {
+  font: 400 11.5px var(--font-sans);
+  color: var(--color-muted-onink);
+  font-style: italic;
+}
+
+.vc-tender-score {
+  font: 700 15px var(--font-sans);
+  color: var(--color-mint-deep);
+}

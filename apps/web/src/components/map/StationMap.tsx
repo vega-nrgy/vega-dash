@@ -6,8 +6,9 @@ import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import "leaflet.markercluster";
-import type { StationMarkerRow, PanelState } from "@/lib/types";
+import type { StationMarkerRow, PanelState, PotentialSite } from "@/lib/types";
 import { stationDivIcon, stationPopupHtml } from "./StationMarkerIcon";
+import { potentialSiteDivIcon, potentialSitePopupHtml } from "./PotentialSiteMarkerIcon";
 
 // Telangana bounding center (roughly Hyderabad).
 const DEFAULT_CENTER: [number, number] = [17.9784, 79.5941];
@@ -52,6 +53,11 @@ interface StationMapProps {
    * with a distinct marker style (see StationMarkerIcon's `selected`) so it's clear which
    * marker the open panel corresponds to. */
   selectedScno?: string | null;
+  /** PM E Drive tender candidate sites (ANNEXURE-IV), already filtered by cluster/
+   * visibility — see DashboardShell's potentialSiteFilters. Rendered as a separate,
+   * un-clustered layer (diamond markers, colored per cluster) so they stay visually
+   * and structurally distinct from the live-station marker cluster group above. */
+  potentialSites?: PotentialSite[];
 }
 
 const predictDivIcon = L.divIcon({
@@ -71,10 +77,12 @@ export default function StationMap({
   radiusCircle,
   onRadiusCircleCommit,
   selectedScno,
+  potentialSites,
 }: StationMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
+  const potentialSitesLayerRef = useRef<L.LayerGroup | null>(null);
   const predictMarkerRef = useRef<L.Marker | null>(null);
   const radiusCircleRef = useRef<L.Circle | null>(null);
   const radiusHandleRef = useRef<L.Marker | null>(null);
@@ -126,12 +134,19 @@ export default function StationMap({
 
     map.addLayer(cluster);
 
+    // Un-clustered — only ~116 tender candidates, and keeping each diamond individually
+    // visible (rather than bubbled into a cluster count) matters more here than it does
+    // for the ~979-strong live-station layer above.
+    const potentialSitesLayer = L.layerGroup();
+    potentialSitesLayer.addTo(map);
+
     map.on("contextmenu", (e: L.LeafletMouseEvent) => {
       onContextMenuRef.current(e.latlng.lat, e.latlng.lng, e.containerPoint);
     });
 
     mapRef.current = map;
     clusterRef.current = cluster;
+    potentialSitesLayerRef.current = potentialSitesLayer;
 
     // SideNav's collapse toggle animates the map container's width via CSS
     // transition — Leaflet doesn't observe that itself, so without this its
@@ -146,6 +161,7 @@ export default function StationMap({
       map.remove();
       mapRef.current = null;
       clusterRef.current = null;
+      potentialSitesLayerRef.current = null;
     };
   }, []);
 
@@ -169,6 +185,25 @@ export default function StationMap({
 
     cluster.addLayers(markers);
   }, [stations, selectedScno]);
+
+  // Sync the tender-candidate diamond markers whenever the (already cluster/visibility
+  // filtered) potentialSites list changes -- see DashboardShell's potentialSiteFilters.
+  useEffect(() => {
+    const layer = potentialSitesLayerRef.current;
+    if (!layer) return;
+
+    layer.clearLayers();
+
+    (potentialSites ?? [])
+      .filter((s) => Number.isFinite(s.latitude) && Number.isFinite(s.longitude))
+      .forEach((site) => {
+        const marker = L.marker([site.latitude, site.longitude], {
+          icon: potentialSiteDivIcon(site),
+        });
+        marker.bindPopup(potentialSitePopupHtml(site));
+        layer.addLayer(marker);
+      });
+  }, [potentialSites]);
 
   // React to programmatic focus changes (area/landmark/station/predict results).
   // Deliberately independent of predictMarker — this only fires from the initial

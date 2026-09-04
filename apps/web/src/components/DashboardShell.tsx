@@ -10,6 +10,13 @@ import { RightClickMenu } from "@/components/map/RightClickMenu";
 import { TutorialTour } from "@/components/tutorial/TutorialTour";
 import { DEFAULT_MAP_FILTERS, type MapFilters, type PanelState, type SearchResponse, type StationMarkerRow } from "@/lib/types";
 import type { MapFocus } from "@/components/map/StationMap";
+import { POTENTIAL_SITES } from "@/lib/data/potential-sites";
+import type { PotentialSiteFilters } from "@/components/nav/SideNav";
+
+const DEFAULT_POTENTIAL_SITE_FILTERS: PotentialSiteFilters = {
+  visible: true,
+  clusters: [1, 2, 3, 4, 5],
+};
 
 // Leaflet touches `window` at import time — must be client-only, no SSR.
 const StationMap = dynamic(() => import("@/components/map/StationMap"), { ssr: false });
@@ -39,6 +46,12 @@ function circleBounds(
 export function DashboardShell({ stations }: { stations: StationMarkerRow[] }) {
   const searchParams = useSearchParams();
   const [filters, setFilters] = useState<MapFilters>(DEFAULT_MAP_FILTERS);
+  // Independent of MapFilters/URL -- these are an overlay of tender candidate sites,
+  // not a filter over the live `stations` prop, so they don't belong in the URL-backed
+  // panel state either. See SideNav's "Potential Sites" section.
+  const [potentialSiteFilters, setPotentialSiteFilters] = useState<PotentialSiteFilters>(
+    DEFAULT_POTENTIAL_SITE_FILTERS
+  );
 
   // Seeded once from the request's search params -- useSearchParams() is correct
   // even during SSR, so a shared deep link (e.g. ?panel=station&scno=X) still
@@ -83,6 +96,14 @@ export function DashboardShell({ stations }: { stations: StationMarkerRow[] }) {
         return true;
       }),
     [stations, filters]
+  );
+
+  const filteredPotentialSites = useMemo(
+    () =>
+      potentialSiteFilters.visible
+        ? POTENTIAL_SITES.filter((s) => potentialSiteFilters.clusters.includes(s.cluster))
+        : [],
+    [potentialSiteFilters]
   );
 
   // Single-level "back" target — set only by handleSelectStation when opening a
@@ -302,6 +323,10 @@ export function DashboardShell({ stations }: { stations: StationMarkerRow[] }) {
         onFiltersChange={setFilters}
         visibleCount={filteredStations.length}
         totalCount={stations.length}
+        potentialSiteFilters={potentialSiteFilters}
+        onPotentialSiteFiltersChange={setPotentialSiteFilters}
+        potentialSiteVisibleCount={filteredPotentialSites.length}
+        potentialSiteTotalCount={POTENTIAL_SITES.length}
       />
       <div className="relative flex-1">
         <StationMap
@@ -319,6 +344,7 @@ export function DashboardShell({ stations }: { stations: StationMarkerRow[] }) {
           }
           onRadiusCircleCommit={handleNearbyRadiusCommit}
           selectedScno={selectedScno}
+          potentialSites={filteredPotentialSites}
         />
         <div className="absolute left-4 top-4 z-[999] w-full max-w-md">
           <SearchBar onResolved={handleSearchResolved} />
